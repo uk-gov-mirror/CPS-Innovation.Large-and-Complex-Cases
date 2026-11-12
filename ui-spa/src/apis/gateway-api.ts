@@ -26,6 +26,12 @@ import {
   type ConnectEgressPayload,
   type ConnectNetAppPayload,
   type CreateEgressCasePayload,
+  type BatchOperationPayload,
+  type BatchOperationResponse,
+  type ManageMaterialsActiveResponse,
+  batchOperationPayloadSchema,
+  batchOperationResponseSchema,
+  manageMaterialsActiveResponseSchema,
   caseDivisionsOrAreaResponseSchema,
   searchResultDataSchema,
   egressSearchResultResponseSchema,
@@ -653,6 +659,90 @@ export const logTelemetryEvent = async (payload: TelemetryPayload) => {
       error,
     );
   }
+};
+
+const readErrorMessages = async (
+  response: Response,
+): Promise<string | undefined> => {
+  try {
+    const text = await response.text();
+    if (!text) return undefined;
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed.join("\n");
+      if (typeof parsed === "string") return parsed;
+      return text;
+    } catch {
+      return text;
+    }
+  } catch {
+    return undefined;
+  }
+};
+
+export const initiateBatchCopy = async (
+  payload: BatchOperationPayload,
+): Promise<BatchOperationResponse> => {
+  const validatedData = batchOperationPayloadSchema.safeParse(payload);
+  if (!validatedData.success) {
+    console.warn(`Invalid batch copy request payload: ${validatedData.error}`);
+    throw new Error(`Invalid batch copy request payload`);
+  }
+
+  const url = `${GATEWAY_BASE_URL}/api/v1/netapp/copy/batch`;
+  const headers = await buildCommonHeaders();
+  const response = await fetchOrThrow(
+    url,
+    headers,
+    "POST",
+    JSON.stringify(payload),
+  );
+
+  if (!response.ok) {
+    const customMessage =
+      response.status === 409 || response.status === 404
+        ? await readErrorMessages(response)
+        : undefined;
+    throw new ApiError(`initiate batch copy failed`, url, response, {
+      correlationId: headers[CORRELATION_ID],
+      customMessage,
+    });
+  }
+
+  return parseAndValidateResponse<BatchOperationResponse>(
+    response,
+    url,
+    batchOperationResponseSchema,
+    "batchOperationResponseSchema",
+    headers[CORRELATION_ID],
+  );
+};
+
+export const getActiveManageMaterialsOperations = async (
+  caseId: string,
+): Promise<ManageMaterialsActiveResponse> => {
+  const url = `${GATEWAY_BASE_URL}/api/v1/cases/${caseId}/manage-materials/active`;
+  const headers = await buildCommonHeaders();
+  const response = await fetchOrThrow(url, headers, "GET");
+
+  if (!response.ok) {
+    throw new ApiError(
+      `Getting active manage materials operations failed`,
+      url,
+      response,
+      {
+        correlationId: headers[CORRELATION_ID],
+      },
+    );
+  }
+
+  return parseAndValidateResponse<ManageMaterialsActiveResponse>(
+    response,
+    url,
+    manageMaterialsActiveResponseSchema,
+    "manageMaterialsActiveResponseSchema",
+    headers[CORRELATION_ID],
+  );
 };
 
 export const createEgressCase = async (payload: CreateEgressCasePayload) => {

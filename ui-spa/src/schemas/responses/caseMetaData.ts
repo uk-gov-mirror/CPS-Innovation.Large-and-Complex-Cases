@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { manageMaterialsOperationSchema } from "./manageMaterialsActiveResponse";
 
 export const caseMetaDataResponseSchema = z
   .object({
@@ -10,6 +11,9 @@ export const caseMetaDataResponseSchema = z
     leadDefendantName: z.string().nullable(),
     activeTransferId: z.string().nullable(),
     urn: z.string(),
+    activeManageMaterialsOperations: z
+      .array(manageMaterialsOperationSchema)
+      .default([]),
   })
   .superRefine((val, ctx) => {
     // both operationName and leadDefendantName cannot be falsy at the same time

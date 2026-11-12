@@ -25,15 +25,60 @@ import {
   // egressToNetAppIndexingErrorDev,
   activityLogDev,
   activityLogPlaywright,
+  MANAGE_MATERIALS_COPY_ID_DEV,
+  manageMaterialsActiveOperationsDev,
+  getNetAppToNetAppCopyStatusDev,
+  MANAGE_MATERIALS_COPY_ID_PLAYWRIGHT,
+  manageMaterialsActiveOperationsPlaywright,
+  netAppToNetAppCopyStatusPlaywright,
 } from "./data";
 import { IndexingFileTransferPayload } from "../schemas/requests/indexingFileTransferPayload";
 import { InitiateFileTransferPayload } from "../schemas/requests/initiateFileTransferPayload";
+import {
+  type BatchOperationPayload,
+  type ManageMaterialsActiveResponse,
+} from "../schemas";
+import {
+  collectLockedPaths,
+  isPathLocked,
+} from "../common/utils/manageMaterialsLocks";
 
 export const CASE_REGISTRATION_JOURNEY_URN = "11AA1234567";
+
+export const MANAGE_MATERIALS_CONFLICT_MESSAGE =
+  "A conflicting manage materials operation is already in progress for one or more of the specified paths.";
+
+const DEV_COPY_IN_PROGRESS_POLLS = 3;
 
 export const setupHandlers = (baseUrl: string, apiMockSource: string) => {
   const isDevMock = () => apiMockSource === "dev";
   const RESPONSE_DELAY = isDevMock() ? 10 : 0;
+
+  // The dev mock keeps the user's copy active for a few status polls so the
+  // locks and the success banner can be seen working together.
+  let devCopy: {
+    payload: BatchOperationPayload;
+    statusPolls: number;
+  } | null = null;
+
+  const getActiveOperations = (): ManageMaterialsActiveResponse => {
+    if (!isDevMock()) return manageMaterialsActiveOperationsPlaywright;
+    if (!devCopy) return manageMaterialsActiveOperationsDev;
+    return [
+      ...manageMaterialsActiveOperationsDev,
+      {
+        id: MANAGE_MATERIALS_COPY_ID_DEV,
+        operationType: "BatchCopy",
+        sourcePaths: JSON.stringify(
+          devCopy.payload.operations.map(({ sourcePath }) => sourcePath),
+        ),
+        destinationPaths: JSON.stringify([devCopy.payload.destinationPrefix]),
+        userName: "dev_user@example.org",
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  };
+
   return [
     http.get(`${baseUrl}/api/v1/areas`, async () => {
       const results = isDevMock() ? caseAreasDev : caseAreasPlaywright;
@@ -195,6 +240,70 @@ export const setupHandlers = (baseUrl: string, apiMockSource: string) => {
         return HttpResponse.json(response);
       },
     ),
+    http.get(
+      `${baseUrl}/api/v1/cases/:caseId/manage-materials/active`,
+      async () => {
+        await delay(RESPONSE_DELAY);
+        return HttpResponse.json(getActiveOperations());
+      },
+    ),
+
+    http.post(`${baseUrl}/api/v1/netapp/copy/batch`, async ({ request }) => {
+      const payload = (await request.json()) as BatchOperationPayload;
+      await delay(isDevMock() ? 1000 : 0);
+      const lockedPaths = collectLockedPaths(getActiveOperations());
+      const requestedPaths = [
+        payload.destinationPrefix,
+        ...payload.operations.map(({ sourcePath }) => sourcePath),
+      ];
+      if (requestedPaths.some((path) => isPathLocked(path, lockedPaths))) {
+        return HttpResponse.json([MANAGE_MATERIALS_CONFLICT_MESSAGE], {
+          status: 409,
+        });
+      }
+      const id = isDevMock()
+        ? MANAGE_MATERIALS_COPY_ID_DEV
+        : MANAGE_MATERIALS_COPY_ID_PLAYWRIGHT;
+      if (isDevMock()) devCopy = { payload, statusPolls: 0 };
+      return HttpResponse.json(
+        { id, status: "Initiated", createdAt: new Date().toISOString() },
+        { status: 202 },
+      );
+    }),
+
+    http.get(
+      `${baseUrl}/api/v1/filetransfer/${MANAGE_MATERIALS_COPY_ID_DEV}/status`,
+      async () => {
+        await delay(1000);
+        if (!devCopy) {
+          return HttpResponse.json(
+            getNetAppToNetAppCopyStatusDev("Completed", []),
+          );
+        }
+        devCopy.statusPolls += 1;
+        const sourcePaths = devCopy.payload.operations.map(
+          ({ sourcePath }) => sourcePath,
+        );
+        if (devCopy.statusPolls <= DEV_COPY_IN_PROGRESS_POLLS) {
+          return HttpResponse.json(
+            getNetAppToNetAppCopyStatusDev("InProgress", sourcePaths),
+          );
+        }
+        devCopy = null;
+        return HttpResponse.json(
+          getNetAppToNetAppCopyStatusDev("Completed", sourcePaths),
+        );
+      },
+    ),
+
+    http.get(
+      `${baseUrl}/api/v1/filetransfer/${MANAGE_MATERIALS_COPY_ID_PLAYWRIGHT}/status`,
+      async () => {
+        await delay(RESPONSE_DELAY);
+        return HttpResponse.json(netAppToNetAppCopyStatusPlaywright);
+      },
+    ),
+
     http.get(`${baseUrl}/api/v1/activity/logs`, async () => {
       const response = isDevMock() ? activityLogDev : activityLogPlaywright;
 

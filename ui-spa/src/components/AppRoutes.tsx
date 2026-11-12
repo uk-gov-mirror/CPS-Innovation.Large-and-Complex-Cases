@@ -20,6 +20,7 @@ import CaseRegistrationEgressConnectFailurePage from "./case-registration/manage
 import ManageEgressPage from "./case-registration/manage-egress";
 import EgressConnectedConfirmationPage from "./case-registration/manage-egress/EgressConnectedConfirmationPage";
 import ManageSharedDrivePage from "./case-registration/manage-shared-drive";
+import { ChooseFolderPage } from "../features/manage-materials";
 import MaintenancePage from "./maintenance-page";
 import UnAuthorisedPage from "./unauthorised";
 import { MainStateContext } from "../providers/MainStateProvider";
@@ -128,6 +129,10 @@ const AppRoutes = () => {
         <Route
           path="/case/:caseId/case-management/transfer-destination-page"
           element={<TransferDestinationPage />}
+        />
+        <Route
+          path="/case/:caseId/case-management/manage-materials-choose-folder"
+          element={<ChooseFolderPage />}
         />
         <Route
           path="/case-registration/egress-connect-search-results"

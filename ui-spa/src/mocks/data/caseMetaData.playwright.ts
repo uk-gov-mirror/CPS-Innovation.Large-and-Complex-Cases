@@ -8,4 +8,5 @@ export const caseMetaDataPlaywright: CaseMetaDataResponse = {
   leadDefendantName: null,
   urn: "45AA2098221",
   activeTransferId: null,
+  activeManageMaterialsOperations: [],
 };

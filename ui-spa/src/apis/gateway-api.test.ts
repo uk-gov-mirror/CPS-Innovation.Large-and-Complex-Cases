@@ -18,6 +18,8 @@ import {
   disconnectNetAppFolder,
   disconnectEgressFolder,
   logTelemetryEvent,
+  initiateBatchCopy,
+  getActiveManageMaterialsOperations,
 } from "./gateway-api";
 import { ApiError } from "../common/errors/ApiError";
 import { v4 } from "uuid";
@@ -916,7 +918,10 @@ describe("gateway apis", () => {
       });
 
       const result = await getCaseMetaData("12");
-      expect(result).toEqual(mockData);
+      expect(result).toEqual({
+        ...mockData,
+        activeManageMaterialsOperations: [],
+      });
       expect(fetch).toHaveBeenCalledWith(
         `gateway_url/api/v1/cases/12`,
         expect.objectContaining({
@@ -2606,6 +2611,155 @@ describe("gateway apis", () => {
       expect(consoleWarnMock).toHaveBeenCalledWith(
         "Logging telemetry event failed due to network or auth error:",
         Error("network down"),
+      );
+    });
+  });
+
+  describe("initiateBatchCopy", () => {
+    const payload = {
+      caseId: 12,
+      destinationPrefix: "netapp/folder-2/",
+      operations: [{ type: "Folder" as const, sourcePath: "netapp/folder-1/" }],
+    };
+
+    beforeEach(() => {
+      (v4 as any).mockReturnValue("id_123");
+      (getAccessToken as any).mockResolvedValue("access_token");
+    });
+
+    it("initiateBatchCopy - should post the payload and return the response", async () => {
+      const mockData = {
+        id: "copy-id",
+        status: "Initiated",
+        createdAt: "2026-01-01T00:00:00Z",
+      };
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        status: 202,
+        json: async () => mockData,
+      });
+
+      const result = await initiateBatchCopy(payload);
+      expect(result).toEqual(mockData);
+      expect(fetch).toHaveBeenCalledWith(
+        "gateway_url/api/v1/netapp/copy/batch",
+        expect.objectContaining({
+          method: "POST",
+          credentials: "include",
+          headers: {
+            Authorization: "Bearer access_token",
+            "Correlation-Id": "id_123",
+          },
+          body: JSON.stringify(payload),
+        }),
+      );
+    });
+
+    it("initiateBatchCopy - should throw when the payload is invalid", async () => {
+      await expect(
+        initiateBatchCopy({ ...payload, operations: [] }),
+      ).rejects.toThrow("Invalid batch copy request payload");
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("initiateBatchCopy - should put conflict messages into customMessage on a 409", async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: "Conflict",
+        text: async () => JSON.stringify(["message one", "message two"]),
+      });
+
+      const error = await initiateBatchCopy(payload).catch((e) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error.code).toBe(409);
+      expect(error.customMessage).toBe("message one\nmessage two");
+      expect(error.correlationId).toBe("id_123");
+    });
+
+    it("initiateBatchCopy - should use a plain text body as customMessage on a 409", async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: "Conflict",
+        text: async () => "operation in progress",
+      });
+
+      const error = await initiateBatchCopy(payload).catch((e) => e);
+      expect(error.customMessage).toBe("operation in progress");
+    });
+
+    it("initiateBatchCopy - should throw an ApiError without customMessage on a 500", async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+      });
+
+      const error = await initiateBatchCopy(payload).catch((e) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error.code).toBe(500);
+      expect(error.customMessage).toBeUndefined();
+    });
+  });
+
+  describe("getActiveManageMaterialsOperations", () => {
+    beforeEach(() => {
+      (v4 as any).mockReturnValue("id_123");
+      (getAccessToken as any).mockResolvedValue("access_token");
+    });
+
+    it("getActiveManageMaterialsOperations - should return the active operations", async () => {
+      const mockData = [
+        {
+          id: "op-1",
+          operationType: "BatchCopy",
+          sourcePaths: '["netapp/a/"]',
+          destinationPaths: '["netapp/b/"]',
+          userName: "user",
+          createdAt: "2026-01-01T00:00:00Z",
+        },
+      ];
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => mockData,
+      });
+
+      const result = await getActiveManageMaterialsOperations("12");
+      expect(result).toEqual(mockData);
+      expect(fetch).toHaveBeenCalledWith(
+        "gateway_url/api/v1/cases/12/manage-materials/active",
+        expect.objectContaining({
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Authorization: "Bearer access_token",
+            "Correlation-Id": "id_123",
+          },
+        }),
+      );
+    });
+
+    it("getActiveManageMaterialsOperations - should throw an ApiError when fetch fails", async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+      });
+
+      await expect(getActiveManageMaterialsOperations("12")).rejects.toThrow(
+        ApiError,
+      );
+    });
+
+    it("getActiveManageMaterialsOperations - should throw on an invalid response", async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => [{ id: 1 }],
+      });
+
+      await expect(getActiveManageMaterialsOperations("12")).rejects.toThrow(
+        "response schema validation failed",
       );
     });
   });

@@ -8,4 +8,5 @@ export const caseMetaDataDev: CaseMetaDataResponse = {
   leadDefendantName: "John Doe",
   urn: "45AA2098221",
   activeTransferId: "",
+  activeManageMaterialsOperations: [],
 };

@@ -1,17 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getNetAppFolders } from "../../../apis/gateway-api";
+import { useUserDetails } from "../../../auth";
 import { ApiError } from "../../../common/errors/ApiError";
 import { mapToNetAppFolderData } from "../../../common/utils/mapToNetAppFolderData";
 import { getFolderNameFromPath } from "../../../common/utils/getFolderNameFromPath";
 import { getUrlSearchParam } from "../../../common/utils/getUrlSearchParam";
 import { sortByStringProperty } from "../../../common/utils/sortUtils";
-import { type NetAppFileFolder } from "../../../schemas";
+import { getCommonPath } from "../../../common/utils/getCommonPath";
+import { isPathWithin } from "../../../common/utils/manageMaterialsLocks";
+import {
+  type ManageMaterialsOperation,
+  type NetAppFileFolder,
+} from "../../../schemas";
 import {
   DropdownButton,
   type DropdownButtonItem,
 } from "../../../components/common/DropdownButton";
+import {
+  Details,
+  LinkButton,
+  NotificationBanner,
+} from "../../../components/govuk";
+import RelativePathFiles from "../../../components/case-management/activity-log/RelativePathFiles";
+import { MainStateContext } from "../../../providers/MainStateProvider";
+import { useActiveManageMaterialsOperations } from "../hooks/useActiveManageMaterialsOperations";
+import {
+  type CopyResult,
+  useTrackManageMaterialsCopies,
+} from "../hooks/useTrackManageMaterialsCopies";
 import MaterialsTable, { SELECT_ALL_CHECKBOX_ID } from "./MaterialsTable";
 import styles from "./ManageMaterialsPage.module.scss";
 
@@ -22,11 +40,14 @@ const SELECTION_ACTIONS = [
   { id: "delete", label: "Delete" },
 ];
 
+export const MANAGE_MATERIALS_QUERY_KEY = "manage-materials";
+
 type ManageMaterialsPageProps = {
   isTabActive: boolean;
   caseId: string;
   operationName: string;
   netAppPath: string;
+  initialActiveOperations?: ManageMaterialsOperation[];
 };
 
 const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
@@ -34,11 +55,29 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
   caseId,
   operationName,
   netAppPath,
+  initialActiveOperations,
 }) => {
   const navigate = useNavigate();
-  const [folderPath, setFolderPath] = useState(netAppPath);
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const { username } = useUserDetails();
+  const {
+    state: {
+      appData: { manageMaterialsPage },
+    },
+    dispatch,
+  } = useContext(MainStateContext);
+
+  const [folderPath, setFolderPath] = useState(() =>
+    manageMaterialsPage.caseId === caseId &&
+    manageMaterialsPage.folderPath &&
+    isPathWithin(manageMaterialsPage.folderPath, netAppPath)
+      ? manageMaterialsPage.folderPath
+      : netAppPath,
+  );
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [sortType, setSortType] = useState<"ascending" | "descending">();
+  const [copyResult, setCopyResult] = useState<CopyResult | null>(null);
 
   const {
     data: netAppData,
@@ -46,12 +85,54 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
     isError,
     error,
   } = useQuery({
-    queryKey: ["manage-materials", folderPath],
+    queryKey: [MANAGE_MATERIALS_QUERY_KEY, folderPath],
     queryFn: () => getNetAppFolders(folderPath),
     retry: false,
     enabled: isTabActive && !!folderPath,
     staleTime: 0,
     gcTime: 0,
+  });
+
+  const {
+    activeOperations,
+    lockedPaths,
+    isLocked,
+    refetch: refetchActiveOperations,
+  } = useActiveManageMaterialsOperations(
+    caseId,
+    initialActiveOperations,
+    isTabActive,
+  );
+
+  const pendingCopies = useMemo(
+    () =>
+      manageMaterialsPage.pendingCopies.filter(
+        (pendingCopy) => pendingCopy.caseId === caseId,
+      ),
+    [manageMaterialsPage.pendingCopies, caseId],
+  );
+
+  const handleCopyFinished = useCallback(
+    (result: CopyResult) => {
+      setCopyResult(result);
+      dispatch({
+        type: "REMOVE_MANAGE_MATERIALS_PENDING_COPY",
+        payload: { id: result.id },
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [MANAGE_MATERIALS_QUERY_KEY],
+      });
+      void refetchActiveOperations();
+    },
+    [dispatch, queryClient, refetchActiveOperations],
+  );
+
+  useTrackManageMaterialsCopies({
+    activeOperations,
+    pendingCopies,
+    username,
+    enabled: true,
+    onCopyFinished: handleCopyFinished,
   });
 
   const items = useMemo(() => {
@@ -60,6 +141,11 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
       ? sortByStringProperty(folderData, "name", sortType)
       : folderData;
   }, [netAppData, sortType]);
+
+  const lockedItemCount = useMemo(
+    () => items.filter(({ path }) => isLocked(path)).length,
+    [items, isLocked],
+  );
 
   const breadcrumbFolders = useMemo(() => {
     const parts = folderPath.replace(netAppPath, "").split("/").filter(Boolean);
@@ -94,11 +180,24 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
     throw error;
   }, [isError, error, caseId, operationName, navigate]);
 
+  useEffect(() => {
+    if (!lockedPaths.length) return;
+    setSelectedPaths((previous) => {
+      const unlocked = previous.filter((path) => !isLocked(path));
+      return unlocked.length === previous.length ? previous : unlocked;
+    });
+  }, [lockedPaths, isLocked]);
+
   const handleCheckboxChange = (id: string, checked: boolean) => {
     if (id === SELECT_ALL_CHECKBOX_ID) {
-      setSelectedPaths(checked ? items.map(({ path }) => path) : []);
+      setSelectedPaths(
+        checked
+          ? items.filter(({ path }) => !isLocked(path)).map(({ path }) => path)
+          : [],
+      );
       return;
     }
+    if (isLocked(id)) return;
     setSelectedPaths((previous) =>
       checked ? [...previous, id] : previous.filter((path) => path !== id),
     );
@@ -117,6 +216,24 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
     type: "ascending" | "descending",
   ) => setSortType(type);
 
+  const handleSelectionAction = (actionId: string) => {
+    if (actionId !== "copy") return;
+    setCopyResult(null);
+    dispatch({
+      type: "SET_MANAGE_MATERIALS_PAGE",
+      payload: {
+        caseId,
+        folderPath,
+        sourceItems: items
+          .filter(({ path }) => selectedPaths.includes(path))
+          .map(({ path, isFolder }) => ({ path, isFolder })),
+      },
+    });
+    navigate(
+      `/case/${caseId}/case-management/manage-materials-choose-folder${location.search}`,
+    );
+  };
+
   const selectionActionItems: DropdownButtonItem[] = SELECTION_ACTIONS.map(
     ({ id, label }) => ({
       id,
@@ -126,6 +243,68 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
     }),
   );
 
+  const renderCopyResultBanner = () => {
+    if (!copyResult) return null;
+    const sourcePath = getCommonPath([
+      ...copyResult.successfulItems.map(({ path }) => path),
+      ...copyResult.failedItems.map(({ sourcePath }) => sourcePath),
+    ]);
+
+    if (copyResult.status === "Completed") {
+      return (
+        <div className={styles.resultBanner}>
+          <NotificationBanner
+            type="success"
+            data-testid="copy-success-notification-banner"
+          >
+            <b className={styles.resultMessage}>
+              The materials have been copied
+            </b>
+            <p>
+              They are in:{" "}
+              <LinkButton
+                onClick={() => navigateToFolder(copyResult.destinationPath)}
+                dataTestId="copy-success-destination-folder"
+              >
+                {getFolderNameFromPath(copyResult.destinationPath)}
+              </LinkButton>
+            </p>
+            <Details summaryChildren="Show copied materials">
+              <RelativePathFiles
+                successFiles={copyResult.successfulItems}
+                errorFiles={[]}
+                sourcePath={sourcePath}
+                name="copy"
+              />
+            </Details>
+          </NotificationBanner>
+        </div>
+      );
+    }
+
+    return (
+      <div className={styles.resultBanner}>
+        <NotificationBanner data-testid="copy-error-notification-banner">
+          <b className={styles.resultMessage}>
+            {copyResult.status === "PartiallyCompleted"
+              ? "Some materials could not be copied"
+              : "The materials could not be copied"}
+          </b>
+          <Details summaryChildren="Show materials that could not be copied">
+            <RelativePathFiles
+              successFiles={copyResult.successfulItems}
+              errorFiles={copyResult.failedItems.map(({ sourcePath }) => ({
+                path: sourcePath,
+              }))}
+              sourcePath={sourcePath}
+              name="copy-error"
+            />
+          </Details>
+        </NotificationBanner>
+      </div>
+    );
+  };
+
   if (!isTabActive) return null;
 
   return (
@@ -133,6 +312,20 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
       <h2>Manage materials on the shared drive</h2>
       <p>You can add, rename or remove materials and folders.</p>
       <hr className={styles.sectionBreak} />
+
+      {renderCopyResultBanner()}
+
+      {!!activeOperations.length && (
+        <div className={styles.lockedBanner}>
+          <NotificationBanner data-testid="materials-locked-notification-banner">
+            <p className="govuk-body">
+              A copy is in progress for this case.
+              {lockedItemCount > 0 &&
+                ` ${lockedItemCount === 1 ? "1 item in this folder is" : `${lockedItemCount} items in this folder are`} locked and cannot be selected.`}
+            </p>
+          </NotificationBanner>
+        </div>
+      )}
 
       <nav
         className={`govuk-breadcrumbs ${styles.breadcrumbs}`}
@@ -166,7 +359,7 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
         <DropdownButton
           name="Actions on selection"
           dropDownItems={selectionActionItems}
-          callBackFn={() => {}}
+          callBackFn={handleSelectionAction}
           dataTestId="materials-actions-dropdown"
           disabled={isLoading}
         />
@@ -176,6 +369,7 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
         items={items}
         isLoading={isLoading}
         selectedPaths={selectedPaths}
+        isLocked={isLocked}
         handleCheckboxChange={handleCheckboxChange}
         handleFolderClick={handleFolderClick}
         handleTableSort={handleTableSort}

@@ -10,11 +10,15 @@ export type TransferWidgetProps = {
   handleCancelClick: () => void;
   handleTransfer: (selectedNode: TreeNode) => void;
   isRootNodeOpened: boolean;
+  title?: string | null;
+  isTransferDisabled?: boolean;
 };
 const TransferWidget: React.FC<TransferWidgetProps> = ({
   data,
   transferAction,
   isRootNodeOpened,
+  title = "Transfer Files",
+  isTransferDisabled = false,
   handleCancelClick,
   onLoadChildren,
   handleTransfer,
@@ -32,7 +36,7 @@ const TransferWidget: React.FC<TransferWidgetProps> = ({
 
   return (
     <div>
-      <h2>Transfer Files</h2>
+      {title && <h2>{title}</h2>}
       <TreeView
         data={data}
         onSelect={onSelect}
@@ -43,7 +47,7 @@ const TransferWidget: React.FC<TransferWidgetProps> = ({
         <Button
           onClick={handleBtnClickHandler}
           className={styles.transferButton}
-          disabled={!selectedNode}
+          disabled={!selectedNode || isTransferDisabled}
           data-testid="transfer-action-button"
         >
           {selectedNode

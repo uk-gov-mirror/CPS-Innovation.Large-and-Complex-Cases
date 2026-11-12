@@ -78,7 +78,7 @@ const TransferMaterialsPage: React.FC<TransferMaterialsPageProp> = ({
   );
   const [activeTransferData, setActiveTransferData] = useState<null | {
     username: string;
-    direction: "EgressToNetApp" | "NetAppToEgress";
+    direction: TransferStatusResponse["direction"];
     transferType: "Move" | "Copy";
     transferMetrics: {
       totalFiles: number;

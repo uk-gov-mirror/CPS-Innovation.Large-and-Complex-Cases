@@ -30,5 +30,15 @@ export {
   egressToNetAppTransferStatusPlaywright,
   netAppToEgressTransferStatusPlaywright,
 } from "./transferStatus.playwright";
+export {
+  MANAGE_MATERIALS_COPY_ID_DEV,
+  manageMaterialsActiveOperationsDev,
+  getNetAppToNetAppCopyStatusDev,
+} from "./manageMaterials.dev";
+export {
+  MANAGE_MATERIALS_COPY_ID_PLAYWRIGHT,
+  manageMaterialsActiveOperationsPlaywright,
+  netAppToNetAppCopyStatusPlaywright,
+} from "./manageMaterials.playwright";
 export { activityLogDev } from "./activityLog.dev";
 export { activityLogPlaywright } from "./activityLog.playwright";

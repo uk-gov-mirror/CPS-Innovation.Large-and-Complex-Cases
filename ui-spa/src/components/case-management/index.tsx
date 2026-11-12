@@ -22,7 +22,10 @@ const CaseManagementPage = () => {
   const { caseId } = useParams() as { caseId: string };
   if (!caseId) throw new Error("missing caseId in the url");
 
-  const [activeTabId, setActiveTabId] = useState<TabId>("transfer-materials");
+  const [activeTabId, setActiveTabId] = useState<TabId>(
+    (location.state as { activeTab?: TabId } | null)?.activeTab ??
+      "transfer-materials",
+  );
 
   const { state, dispatch } = useContext(MainStateContext);
   const {
@@ -130,6 +133,9 @@ const CaseManagementPage = () => {
               caseId={caseId}
               operationName={operationNameOrDefendantName}
               netAppPath={caseMetaData.netappFolderPath}
+              initialActiveOperations={
+                caseMetaData.activeManageMaterialsOperations
+              }
             />
           ) : (
             <></>

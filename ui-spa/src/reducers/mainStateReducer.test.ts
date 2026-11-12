@@ -267,4 +267,71 @@ describe("mainStateReducer", () => {
     } as any);
     expect(state.appData.transferPage?.transferSource).toBe("egress");
   });
+
+  const stateWithManageMaterials = {
+    ...initialState,
+    appData: {
+      ...initialState.appData,
+      manageMaterialsPage: {
+        caseId: "",
+        folderPath: "",
+        sourceItems: [],
+        pendingCopies: [],
+      },
+    },
+  };
+
+  it("sets manage materials page (SET_MANAGE_MATERIALS_PAGE) and keeps pending copies", () => {
+    const withPending = mainStateReducer(stateWithManageMaterials, {
+      type: "ADD_MANAGE_MATERIALS_PENDING_COPY",
+      payload: { id: "copy-1", caseId: "12", destinationPath: "netapp/b/" },
+    });
+    const state = mainStateReducer(withPending, {
+      type: "SET_MANAGE_MATERIALS_PAGE",
+      payload: {
+        caseId: "12",
+        folderPath: "netapp/a/",
+        sourceItems: [{ path: "netapp/a/x/", isFolder: true }],
+      },
+    });
+    expect(state.appData.manageMaterialsPage).toEqual({
+      caseId: "12",
+      folderPath: "netapp/a/",
+      sourceItems: [{ path: "netapp/a/x/", isFolder: true }],
+      pendingCopies: [
+        { id: "copy-1", caseId: "12", destinationPath: "netapp/b/" },
+      ],
+    });
+  });
+
+  it("adds a pending copy only once (ADD_MANAGE_MATERIALS_PENDING_COPY)", () => {
+    const pendingCopy = {
+      id: "copy-1",
+      caseId: "12",
+      destinationPath: "netapp/b/",
+    };
+    const once = mainStateReducer(stateWithManageMaterials, {
+      type: "ADD_MANAGE_MATERIALS_PENDING_COPY",
+      payload: pendingCopy,
+    });
+    const twice = mainStateReducer(once, {
+      type: "ADD_MANAGE_MATERIALS_PENDING_COPY",
+      payload: pendingCopy,
+    });
+    expect(twice.appData.manageMaterialsPage.pendingCopies).toEqual([
+      pendingCopy,
+    ]);
+  });
+
+  it("removes a pending copy (REMOVE_MANAGE_MATERIALS_PENDING_COPY)", () => {
+    const withPending = mainStateReducer(stateWithManageMaterials, {
+      type: "ADD_MANAGE_MATERIALS_PENDING_COPY",
+      payload: { id: "copy-1", caseId: "12", destinationPath: "netapp/b/" },
+    });
+    const state = mainStateReducer(withPending, {
+      type: "REMOVE_MANAGE_MATERIALS_PENDING_COPY",
+      payload: { id: "copy-1" },
+    });
+    expect(state.appData.manageMaterialsPage.pendingCopies).toEqual([]);
+  });
 });

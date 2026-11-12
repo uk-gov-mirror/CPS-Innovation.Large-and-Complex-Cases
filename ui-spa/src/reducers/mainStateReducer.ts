@@ -32,6 +32,24 @@ type TransferDestinationPageData = {
   operationName: string;
 };
 
+export type ManageMaterialsSourceItem = {
+  path: string;
+  isFolder: boolean;
+};
+
+export type ManageMaterialsPendingCopy = {
+  id: string;
+  caseId: string;
+  destinationPath: string;
+};
+
+export type ManageMaterialsPageData = {
+  caseId: string;
+  folderPath: string;
+  sourceItems: ManageMaterialsSourceItem[];
+  pendingCopies: ManageMaterialsPendingCopy[];
+};
+
 export type MainState = {
   appData: {
     featureFlags: FeatureFlagData | null;
@@ -83,6 +101,7 @@ export type MainState = {
       transferSourceNetAppFolderPath: string;
     } | null;
     caseRegistrationCaseDetails: SearchResult | null;
+    manageMaterialsPage: ManageMaterialsPageData;
   };
   formData: FormData;
   apiData: {
@@ -144,6 +163,12 @@ export const initialState: MainState = {
     },
     transferErrorsPage: null,
     transferPage: null,
+    manageMaterialsPage: {
+      caseId: "",
+      folderPath: "",
+      sourceItems: [],
+      pendingCopies: [],
+    },
   },
   formData: {
     searchType: "urn",
@@ -269,6 +294,21 @@ export type MainStateActions =
         transferSourceEgressFolderPath: string;
         transferSourceNetAppFolderPath: string;
       };
+    }
+  | {
+      type: "SET_MANAGE_MATERIALS_PAGE";
+      payload: Pick<
+        ManageMaterialsPageData,
+        "caseId" | "folderPath" | "sourceItems"
+      >;
+    }
+  | {
+      type: "ADD_MANAGE_MATERIALS_PENDING_COPY";
+      payload: ManageMaterialsPendingCopy;
+    }
+  | {
+      type: "REMOVE_MANAGE_MATERIALS_PENDING_COPY";
+      payload: { id: string };
     };
 
 export type DispatchType = React.Dispatch<MainStateActions>;
@@ -450,6 +490,52 @@ export const mainStateReducer = (
         appData: {
           ...state.appData,
           caseRegistrationCaseDetails: action.payload,
+        },
+      };
+    }
+
+    case "SET_MANAGE_MATERIALS_PAGE": {
+      return {
+        ...state,
+        appData: {
+          ...state.appData,
+          manageMaterialsPage: {
+            ...state.appData.manageMaterialsPage,
+            ...action.payload,
+          },
+        },
+      };
+    }
+
+    case "ADD_MANAGE_MATERIALS_PENDING_COPY": {
+      const { pendingCopies } = state.appData.manageMaterialsPage;
+      if (pendingCopies.some(({ id }) => id === action.payload.id)) {
+        return state;
+      }
+      return {
+        ...state,
+        appData: {
+          ...state.appData,
+          manageMaterialsPage: {
+            ...state.appData.manageMaterialsPage,
+            pendingCopies: [...pendingCopies, action.payload],
+          },
+        },
+      };
+    }
+
+    case "REMOVE_MANAGE_MATERIALS_PENDING_COPY": {
+      return {
+        ...state,
+        appData: {
+          ...state.appData,
+          manageMaterialsPage: {
+            ...state.appData.manageMaterialsPage,
+            pendingCopies:
+              state.appData.manageMaterialsPage.pendingCopies.filter(
+                ({ id }) => id !== action.payload.id,
+              ),
+          },
         },
       };
     }
