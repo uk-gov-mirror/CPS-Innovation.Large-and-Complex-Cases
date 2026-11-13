@@ -11,12 +11,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { getNetAppFolders, initiateBatchCopy } from "../../../apis/gateway-api";
 import { ApiError } from "../../../common/errors/ApiError";
 import { getFolderNameFromPath } from "../../../common/utils/getFolderNameFromPath";
-import { isPathWithin } from "../../../common/utils/manageMaterialsLocks";
-import {
-  BackLink,
-  ErrorSummary,
-  NotificationBanner,
-} from "../../../components/govuk";
+import { isPathWithin } from "../../../common/utils/manageMaterialsPaths";
+import { BackLink, ErrorSummary } from "../../../components/govuk";
 import { PageContentWrapper } from "../../../components/govuk/PageContentWrapper";
 import { Spinner } from "../../../components/common/Spinner";
 import TransferWidget from "../../../components/common/transfer-widget/TransferWidget";
@@ -26,7 +22,6 @@ import {
   type BatchOperationPayload,
   type NetAppFolder,
 } from "../../../schemas";
-import { useActiveManageMaterialsOperations } from "../hooks/useActiveManageMaterialsOperations";
 import styles from "./ChooseFolderPage.module.scss";
 
 const DEFAULT_ERROR_MESSAGE =
@@ -56,16 +51,6 @@ const ChooseFolderPage: React.FC = () => {
   const manageMaterialsUrl = `/case/${caseId}/case-management${location.search}`;
   const manageMaterialsState = { activeTab: "manage-materials" };
 
-  const {
-    isLocked,
-    lockedPaths,
-    refetch: refetchActiveOperations,
-  } = useActiveManageMaterialsOperations(
-    caseId,
-    caseMetaData?.activeManageMaterialsOperations,
-    hasValidState,
-  );
-
   const { data: rootFolderData, isLoading: isRootFolderLoading } = useQuery({
     queryKey: ["manage-materials-choose-folder", netAppPath],
     queryFn: () => getNetAppFolders(netAppPath),
@@ -92,9 +77,8 @@ const ChooseFolderPage: React.FC = () => {
 
   const isDestinationDisabled = useCallback(
     (path: string) =>
-      isLocked(path) ||
       sourceFolderPaths.some((sourcePath) => isPathWithin(path, sourcePath)),
-    [isLocked, sourceFolderPaths],
+    [sourceFolderPaths],
   );
 
   const mapToTreeNodes = useCallback(
@@ -171,7 +155,6 @@ const ChooseFolderPage: React.FC = () => {
             .split("\n")
             .filter(Boolean),
         );
-        void refetchActiveOperations();
         return;
       }
       throw error;
@@ -212,15 +195,6 @@ const ChooseFolderPage: React.FC = () => {
         <h1>Choose a folder</h1>
         <p>{`You are copying ${itemCount} item${itemCount === 1 ? "" : "s"}.`}</p>
         <p>{`Select the folder you want to copy ${itemCount === 1 ? "it" : "them"} into.`}</p>
-
-        {!!lockedPaths.length && (
-          <NotificationBanner data-testid="choose-folder-locked-notification-banner">
-            <p className="govuk-body">
-              A copy is in progress for this case. Some folders are locked and
-              cannot be selected.
-            </p>
-          </NotificationBanner>
-        )}
 
         <div id="choose-folder-tree" className={styles.treeWrapper}>
           {isRootFolderLoading ? (

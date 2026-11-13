@@ -3,7 +3,6 @@ interface CheckboxProps {
   checked: boolean;
   onChange: (id: string, checked: boolean) => void;
   ariaLabel: string;
-  disabled?: boolean;
 }
 
 const Checkbox: React.FC<CheckboxProps> = ({

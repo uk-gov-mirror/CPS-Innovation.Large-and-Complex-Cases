@@ -26,7 +26,6 @@ import {
   activityLogDev,
   activityLogPlaywright,
   MANAGE_MATERIALS_COPY_ID_DEV,
-  manageMaterialsActiveOperationsDev,
   getNetAppToNetAppCopyStatusDev,
   MANAGE_MATERIALS_COPY_ID_PLAYWRIGHT,
   manageMaterialsActiveOperationsPlaywright,
@@ -38,15 +37,11 @@ import {
   type BatchOperationPayload,
   type ManageMaterialsActiveResponse,
 } from "../schemas";
-import {
-  collectLockedPaths,
-  isPathLocked,
-} from "../common/utils/manageMaterialsLocks";
 
 export const CASE_REGISTRATION_JOURNEY_URN = "11AA1234567";
 
 export const MANAGE_MATERIALS_CONFLICT_MESSAGE =
-  "A conflicting manage materials operation is already in progress for one or more of the specified paths.";
+  "A manage materials operation is already in progress for this case.";
 
 const DEV_COPY_IN_PROGRESS_POLLS = 3;
 
@@ -55,7 +50,7 @@ export const setupHandlers = (baseUrl: string, apiMockSource: string) => {
   const RESPONSE_DELAY = isDevMock() ? 10 : 0;
 
   // The dev mock keeps the user's copy active for a few status polls so the
-  // locks and the success banner can be seen working together.
+  // progress spinner can be seen before the success banner.
   let devCopy: {
     payload: BatchOperationPayload;
     statusPolls: number;
@@ -63,9 +58,8 @@ export const setupHandlers = (baseUrl: string, apiMockSource: string) => {
 
   const getActiveOperations = (): ManageMaterialsActiveResponse => {
     if (!isDevMock()) return manageMaterialsActiveOperationsPlaywright;
-    if (!devCopy) return manageMaterialsActiveOperationsDev;
+    if (!devCopy) return [];
     return [
-      ...manageMaterialsActiveOperationsDev,
       {
         id: MANAGE_MATERIALS_COPY_ID_DEV,
         operationType: "BatchCopy",
@@ -251,12 +245,7 @@ export const setupHandlers = (baseUrl: string, apiMockSource: string) => {
     http.post(`${baseUrl}/api/v1/netapp/copy/batch`, async ({ request }) => {
       const payload = (await request.json()) as BatchOperationPayload;
       await delay(isDevMock() ? 1000 : 0);
-      const lockedPaths = collectLockedPaths(getActiveOperations());
-      const requestedPaths = [
-        payload.destinationPrefix,
-        ...payload.operations.map(({ sourcePath }) => sourcePath),
-      ];
-      if (requestedPaths.some((path) => isPathLocked(path, lockedPaths))) {
+      if (getActiveOperations().length) {
         return HttpResponse.json([MANAGE_MATERIALS_CONFLICT_MESSAGE], {
           status: 409,
         });
@@ -286,7 +275,14 @@ export const setupHandlers = (baseUrl: string, apiMockSource: string) => {
         );
         if (devCopy.statusPolls <= DEV_COPY_IN_PROGRESS_POLLS) {
           return HttpResponse.json(
-            getNetAppToNetAppCopyStatusDev("InProgress", sourcePaths),
+            getNetAppToNetAppCopyStatusDev(
+              "InProgress",
+              sourcePaths,
+              Math.floor(
+                (sourcePaths.length * (devCopy.statusPolls - 1)) /
+                  DEV_COPY_IN_PROGRESS_POLLS,
+              ),
+            ),
           );
         }
         devCopy = null;

@@ -4,14 +4,38 @@
   border: 1px inset #808080;
 }
 
-.resultBanner,
-.lockedBanner {
+.resultBanner {
   max-width: 715px;
   margin-top: 16px;
 
   & :global(.govuk-notification-banner) {
     margin-bottom: 0;
   }
+}
+
+.operationContent {
+  position: relative;
+  min-height: 21.875rem;
+}
+
+.spinnerWrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: absolute;
+  top: 5rem;
+  & .spinnerText {
+    margin-top: 1rem;
+  }
+}
+
+.progressMetrics {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-direction: column;
+  text-align: center;
 }
 
 .resultMessage {

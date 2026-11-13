@@ -9,7 +9,10 @@ import { getFolderNameFromPath } from "../../../common/utils/getFolderNameFromPa
 import { getUrlSearchParam } from "../../../common/utils/getUrlSearchParam";
 import { sortByStringProperty } from "../../../common/utils/sortUtils";
 import { getCommonPath } from "../../../common/utils/getCommonPath";
-import { isPathWithin } from "../../../common/utils/manageMaterialsLocks";
+import {
+  isPathWithin,
+  parsePaths,
+} from "../../../common/utils/manageMaterialsPaths";
 import {
   type ManageMaterialsOperation,
   type NetAppFileFolder,
@@ -18,6 +21,7 @@ import {
   DropdownButton,
   type DropdownButtonItem,
 } from "../../../components/common/DropdownButton";
+import { Spinner } from "../../../components/common/Spinner";
 import {
   Details,
   LinkButton,
@@ -27,9 +31,11 @@ import RelativePathFiles from "../../../components/case-management/activity-log/
 import { MainStateContext } from "../../../providers/MainStateProvider";
 import { useActiveManageMaterialsOperations } from "../hooks/useActiveManageMaterialsOperations";
 import {
+  BATCH_COPY_OPERATION_TYPE,
   type CopyResult,
-  useTrackManageMaterialsCopies,
-} from "../hooks/useTrackManageMaterialsCopies";
+  type TrackedCopy,
+  useTrackManageMaterialsCopy,
+} from "../hooks/useTrackManageMaterialsCopy";
 import MaterialsTable, { SELECT_ALL_CHECKBOX_ID } from "./MaterialsTable";
 import styles from "./ManageMaterialsPage.module.scss";
 
@@ -39,6 +45,25 @@ const SELECTION_ACTIONS = [
   { id: "rename", label: "Rename selected items" },
   { id: "delete", label: "Delete" },
 ];
+
+const OPERATION_MESSAGES: Record<string, { own: string; otherUser: string }> = {
+  BatchCopy: {
+    own: "Copying materials",
+    otherUser: "is currently copying materials",
+  },
+  BatchMove: {
+    own: "Moving materials",
+    otherUser: "is currently moving materials",
+  },
+};
+
+const DEFAULT_OPERATION_MESSAGE = {
+  own: "Updating materials",
+  otherUser: "is currently updating materials",
+};
+
+const isSameUser = (a: string | null | undefined, b: string) =>
+  !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
 export const MANAGE_MATERIALS_QUERY_KEY = "manage-materials";
 
@@ -78,6 +103,65 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [sortType, setSortType] = useState<"ascending" | "descending">();
   const [copyResult, setCopyResult] = useState<CopyResult | null>(null);
+  const [finishedOperationIds, setFinishedOperationIds] = useState<string[]>(
+    [],
+  );
+
+  const { activeOperations, refetch: refetchActiveOperations } =
+    useActiveManageMaterialsOperations(
+      caseId,
+      initialActiveOperations,
+      isTabActive,
+    );
+
+  const pendingCopy = useMemo(
+    () =>
+      manageMaterialsPage.pendingCopies.find(
+        ({ id, caseId: pendingCaseId }) =>
+          pendingCaseId === caseId && !finishedOperationIds.includes(id),
+      ) ?? null,
+    [manageMaterialsPage.pendingCopies, caseId, finishedOperationIds],
+  );
+
+  const activeOperation = useMemo(
+    () =>
+      activeOperations.find(({ id }) => !finishedOperationIds.includes(id)) ??
+      null,
+    [activeOperations, finishedOperationIds],
+  );
+
+  const trackedCopy = useMemo((): TrackedCopy | null => {
+    if (pendingCopy) return pendingCopy;
+    if (activeOperation?.operationType !== BATCH_COPY_OPERATION_TYPE)
+      return null;
+    return {
+      id: activeOperation.id,
+      destinationPath: parsePaths(activeOperation.destinationPaths)[0] ?? "",
+    };
+  }, [pendingCopy, activeOperation]);
+
+  const isOperationInProgress = !!pendingCopy || !!activeOperation;
+
+  const handleCopyFinished = useCallback(
+    (result: CopyResult) => {
+      setFinishedOperationIds((previous) => [...previous, result.id]);
+      if (isSameUser(result.userName, username)) setCopyResult(result);
+      dispatch({
+        type: "REMOVE_MANAGE_MATERIALS_PENDING_COPY",
+        payload: { id: result.id },
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [MANAGE_MATERIALS_QUERY_KEY],
+      });
+      void refetchActiveOperations();
+    },
+    [dispatch, queryClient, refetchActiveOperations, username],
+  );
+
+  const { progress: copyProgress } = useTrackManageMaterialsCopy({
+    copy: trackedCopy,
+    onCopyFinished: handleCopyFinished,
+  });
 
   const {
     data: netAppData,
@@ -93,59 +177,12 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
     gcTime: 0,
   });
 
-  const {
-    activeOperations,
-    lockedPaths,
-    isLocked,
-    refetch: refetchActiveOperations,
-  } = useActiveManageMaterialsOperations(
-    caseId,
-    initialActiveOperations,
-    isTabActive,
-  );
-
-  const pendingCopies = useMemo(
-    () =>
-      manageMaterialsPage.pendingCopies.filter(
-        (pendingCopy) => pendingCopy.caseId === caseId,
-      ),
-    [manageMaterialsPage.pendingCopies, caseId],
-  );
-
-  const handleCopyFinished = useCallback(
-    (result: CopyResult) => {
-      setCopyResult(result);
-      dispatch({
-        type: "REMOVE_MANAGE_MATERIALS_PENDING_COPY",
-        payload: { id: result.id },
-      });
-      void queryClient.invalidateQueries({
-        queryKey: [MANAGE_MATERIALS_QUERY_KEY],
-      });
-      void refetchActiveOperations();
-    },
-    [dispatch, queryClient, refetchActiveOperations],
-  );
-
-  useTrackManageMaterialsCopies({
-    activeOperations,
-    pendingCopies,
-    username,
-    enabled: true,
-    onCopyFinished: handleCopyFinished,
-  });
-
   const items = useMemo(() => {
     const folderData = netAppData ? mapToNetAppFolderData(netAppData) : [];
     return sortType
       ? sortByStringProperty(folderData, "name", sortType)
       : folderData;
   }, [netAppData, sortType]);
-
-  const lockedItemCount = useMemo(
-    () => items.filter(({ path }) => isLocked(path)).length,
-    [items, isLocked],
-  );
 
   const breadcrumbFolders = useMemo(() => {
     const parts = folderPath.replace(netAppPath, "").split("/").filter(Boolean);
@@ -160,6 +197,38 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
       })),
     ];
   }, [folderPath, netAppPath]);
+
+  const operationMessage = useMemo(() => {
+    if (!isOperationInProgress) return null;
+    const messages = pendingCopy
+      ? OPERATION_MESSAGES[BATCH_COPY_OPERATION_TYPE]
+      : (OPERATION_MESSAGES[activeOperation?.operationType ?? ""] ??
+        DEFAULT_OPERATION_MESSAGE);
+    const operationUserName =
+      copyProgress?.userName ??
+      (pendingCopy ? username : activeOperation?.userName);
+
+    if (!operationUserName || isSameUser(operationUserName, username)) {
+      return {
+        ariaLabelText: messages.own,
+        spinnerTextContent: <span>{messages.own}...</span>,
+      };
+    }
+    return {
+      ariaLabelText: `${operationUserName} ${messages.otherUser}`,
+      spinnerTextContent: (
+        <span>
+          <b>{operationUserName}</b> {messages.otherUser}
+        </span>
+      ),
+    };
+  }, [
+    isOperationInProgress,
+    pendingCopy,
+    activeOperation,
+    copyProgress,
+    username,
+  ]);
 
   useEffect(() => {
     if (!isError || !error) return;
@@ -181,23 +250,14 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
   }, [isError, error, caseId, operationName, navigate]);
 
   useEffect(() => {
-    if (!lockedPaths.length) return;
-    setSelectedPaths((previous) => {
-      const unlocked = previous.filter((path) => !isLocked(path));
-      return unlocked.length === previous.length ? previous : unlocked;
-    });
-  }, [lockedPaths, isLocked]);
+    if (isOperationInProgress) setSelectedPaths([]);
+  }, [isOperationInProgress]);
 
   const handleCheckboxChange = (id: string, checked: boolean) => {
     if (id === SELECT_ALL_CHECKBOX_ID) {
-      setSelectedPaths(
-        checked
-          ? items.filter(({ path }) => !isLocked(path)).map(({ path }) => path)
-          : [],
-      );
+      setSelectedPaths(checked ? items.map(({ path }) => path) : []);
       return;
     }
-    if (isLocked(id)) return;
     setSelectedPaths((previous) =>
       checked ? [...previous, id] : previous.filter((path) => path !== id),
     );
@@ -242,6 +302,40 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
       disabled: !selectedPaths.length,
     }),
   );
+
+  const renderOperationInProgress = () => {
+    const hasProgressMetrics = !!copyProgress?.totalFiles;
+    return (
+      <div className={styles.operationContent}>
+        <output aria-live="polite" className="govuk-visually-hidden">
+          {operationMessage?.ariaLabelText}
+          {hasProgressMetrics &&
+            `Copy progress, ${copyProgress.processedFiles} out of ${copyProgress.totalFiles} files processed`}
+        </output>
+        <div className={styles.spinnerWrapper}>
+          <Spinner
+            data-testid="manage-materials-operation-spinner"
+            diameterPx={50}
+          />
+          <div
+            className={styles.spinnerText}
+            data-testid="manage-materials-operation-message"
+          >
+            {operationMessage?.spinnerTextContent}
+            {hasProgressMetrics && (
+              <div
+                className={styles.progressMetrics}
+                data-testid="copy-progress-metrics"
+              >
+                <span>total files : {copyProgress.totalFiles}</span>
+                <span>files processed : {copyProgress.processedFiles}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderCopyResultBanner = () => {
     if (!copyResult) return null;
@@ -313,67 +407,60 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
       <p>You can add, rename or remove materials and folders.</p>
       <hr className={styles.sectionBreak} />
 
-      {renderCopyResultBanner()}
+      {isOperationInProgress ? (
+        renderOperationInProgress()
+      ) : (
+        <>
+          {renderCopyResultBanner()}
 
-      {!!activeOperations.length && (
-        <div className={styles.lockedBanner}>
-          <NotificationBanner data-testid="materials-locked-notification-banner">
-            <p className="govuk-body">
-              A copy is in progress for this case.
-              {lockedItemCount > 0 &&
-                ` ${lockedItemCount === 1 ? "1 item in this folder is" : `${lockedItemCount} items in this folder are`} locked and cannot be selected.`}
-            </p>
-          </NotificationBanner>
-        </div>
-      )}
-
-      <nav
-        className={`govuk-breadcrumbs ${styles.breadcrumbs}`}
-        aria-label="Breadcrumb"
-        data-testid="manage-materials-breadcrumbs"
-      >
-        <ol className="govuk-breadcrumbs__list">
-          {breadcrumbFolders.map((folder, index) => (
-            <li
-              key={folder.folderPath}
-              className="govuk-breadcrumbs__list-item"
-            >
-              {index === breadcrumbFolders.length - 1 ? (
-                folder.folderName
-              ) : (
-                <button
-                  type="button"
-                  className={`govuk-breadcrumbs__link ${styles.breadcrumbLink}`}
-                  disabled={isLoading}
-                  onClick={() => navigateToFolder(folder.folderPath)}
+          <nav
+            className={`govuk-breadcrumbs ${styles.breadcrumbs}`}
+            aria-label="Breadcrumb"
+            data-testid="manage-materials-breadcrumbs"
+          >
+            <ol className="govuk-breadcrumbs__list">
+              {breadcrumbFolders.map((folder, index) => (
+                <li
+                  key={folder.folderPath}
+                  className="govuk-breadcrumbs__list-item"
                 >
-                  {folder.folderName}
-                </button>
-              )}
-            </li>
-          ))}
-        </ol>
-      </nav>
+                  {index === breadcrumbFolders.length - 1 ? (
+                    folder.folderName
+                  ) : (
+                    <button
+                      type="button"
+                      className={`govuk-breadcrumbs__link ${styles.breadcrumbLink}`}
+                      disabled={isLoading}
+                      onClick={() => navigateToFolder(folder.folderPath)}
+                    >
+                      {folder.folderName}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </nav>
 
-      <div className={styles.toolbar}>
-        <DropdownButton
-          name="Actions on selection"
-          dropDownItems={selectionActionItems}
-          callBackFn={handleSelectionAction}
-          dataTestId="materials-actions-dropdown"
-          disabled={isLoading}
-        />
-      </div>
+          <div className={styles.toolbar}>
+            <DropdownButton
+              name="Actions on selection"
+              dropDownItems={selectionActionItems}
+              callBackFn={handleSelectionAction}
+              dataTestId="materials-actions-dropdown"
+              disabled={isLoading}
+            />
+          </div>
 
-      <MaterialsTable
-        items={items}
-        isLoading={isLoading}
-        selectedPaths={selectedPaths}
-        isLocked={isLocked}
-        handleCheckboxChange={handleCheckboxChange}
-        handleFolderClick={handleFolderClick}
-        handleTableSort={handleTableSort}
-      />
+          <MaterialsTable
+            items={items}
+            isLoading={isLoading}
+            selectedPaths={selectedPaths}
+            handleCheckboxChange={handleCheckboxChange}
+            handleFolderClick={handleFolderClick}
+            handleTableSort={handleTableSort}
+          />
+        </>
+      )}
     </div>
   );
 };

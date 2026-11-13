@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, vi, expect, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router";
@@ -398,72 +398,169 @@ describe("ManageMaterialsPage", () => {
     );
   });
 
-  describe("Locked materials", () => {
-    it("disables rows locked by an active operation and shows the locked banner", async () => {
-      vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([
-        activeOperation(),
-      ]);
-      renderPage({ initialActiveOperations: [activeOperation()] });
-      await screen.findByTestId("materials-table");
-
-      expect(getCheckbox("Select folder 2. Experts")).toBeDisabled();
-      expect(getCheckbox("Select folder 1. Case management")).toBeEnabled();
-      expect(getCheckbox("Select file statement.pdf")).toBeEnabled();
+  describe("Operation in progress", () => {
+    const expectMaterialsHidden = () => {
+      expect(screen.queryByTestId("materials-table")).not.toBeInTheDocument();
       expect(
-        screen.getByTestId("materials-locked-notification-banner"),
-      ).toHaveTextContent(
-        "A copy is in progress for this case. 1 item in this folder is locked and cannot be selected.",
-      );
-    });
+        screen.queryByRole("button", { name: "Actions on selection" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("manage-materials-breadcrumbs"),
+      ).not.toBeInTheDocument();
+    };
 
-    it("only selects unlocked rows with select all", async () => {
-      vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([
-        activeOperation(),
-      ]);
-      renderPage({ initialActiveOperations: [activeOperation()] });
+    it("does not show the spinner when there are no active operations", async () => {
+      renderPage();
       await screen.findByTestId("materials-table");
 
-      await userEvent.click(getCheckbox("Select all files and folders"));
-
-      expect(getCheckbox("Select all files and folders").checked).toBe(true);
-      expect(getCheckbox("Select folder 1. Case management").checked).toBe(
-        true,
-      );
-      expect(getCheckbox("Select file statement.pdf").checked).toBe(true);
-      expect(getCheckbox("Select folder 2. Experts").checked).toBe(false);
+      expect(
+        screen.queryByTestId("manage-materials-operation-spinner"),
+      ).not.toBeInTheDocument();
     });
 
-    it("removes items from the selection when they become locked", async () => {
+    it("hides the materials and shows a spinner with the file counts while the user's copy is in progress", async () => {
+      vi.mocked(pollTransferStatus).mockImplementation(
+        async (_id, _shouldStop, handleResponse) => {
+          handleResponse(
+            copyStatus({
+              status: "InProgress",
+              totalFiles: 10,
+              processedFiles: 4,
+            }),
+          );
+        },
+      );
+      renderPage({
+        pendingCopies: [
+          { id: "copy-1", caseId: "12", destinationPath: rootPath },
+        ],
+      });
+
+      expect(
+        await screen.findByTestId("manage-materials-operation-spinner"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Copying materials...")).toBeInTheDocument();
+      const metrics = await screen.findByTestId("copy-progress-metrics");
+      expect(metrics).toHaveTextContent("total files : 10");
+      expect(metrics).toHaveTextContent("files processed : 4");
+      expect(vi.mocked(pollTransferStatus).mock.calls[0][0]).toBe("copy-1");
+      expectMaterialsHidden();
+    });
+
+    it("shows who is copying when another user's copy is in progress", async () => {
+      const otherCopy = activeOperation();
+      vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([
+        otherCopy,
+      ]);
+      vi.mocked(pollTransferStatus).mockImplementation(
+        async (_id, _shouldStop, handleResponse) => {
+          handleResponse(
+            copyStatus({
+              status: "InProgress",
+              userName: "another.user@example.org",
+              totalFiles: 3,
+              processedFiles: 1,
+            }),
+          );
+        },
+      );
+      renderPage({ initialActiveOperations: [otherCopy] });
+
+      const message = await screen.findByTestId(
+        "manage-materials-operation-message",
+      );
+      await waitFor(() =>
+        expect(message).toHaveTextContent(
+          "another.user@example.org is currently copying materials",
+        ),
+      );
+      expect(screen.getByTestId("copy-progress-metrics")).toHaveTextContent(
+        "files processed : 1",
+      );
+      expect(vi.mocked(pollTransferStatus).mock.calls[0][0]).toBe("op-1");
+      expectMaterialsHidden();
+    });
+
+    it("shows the spinner without polling for an operation that is not a copy", async () => {
+      const otherMove = activeOperation({ operationType: "BatchMove" });
+      vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([
+        otherMove,
+      ]);
+      renderPage({ initialActiveOperations: [otherMove] });
+
+      expect(
+        await screen.findByTestId("manage-materials-operation-message"),
+      ).toHaveTextContent(
+        "another.user@example.org is currently moving materials",
+      );
+      expect(
+        screen.queryByTestId("copy-progress-metrics"),
+      ).not.toBeInTheDocument();
+      expect(pollTransferStatus).not.toHaveBeenCalled();
+      expectMaterialsHidden();
+    });
+
+    it("shows the materials again without a result banner when another user's copy finishes", async () => {
+      const otherCopy = activeOperation();
+      vi.mocked(getActiveManageMaterialsOperations)
+        .mockResolvedValueOnce([otherCopy])
+        .mockResolvedValue([]);
+      vi.mocked(pollTransferStatus).mockImplementation(
+        async (_id, _shouldStop, handleResponse) => {
+          handleResponse(copyStatus({ userName: "another.user@example.org" }));
+        },
+      );
+      renderPage({ initialActiveOperations: [otherCopy] });
+
+      expect(await screen.findByTestId("materials-table")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("manage-materials-operation-spinner"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("copy-success-notification-banner"),
+      ).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(getActiveManageMaterialsOperations).toHaveBeenCalledTimes(2),
+      );
+    });
+
+    it("clears the selection when an operation starts", async () => {
       let resolveActiveOperations: (
         ops: ManageMaterialsOperation[],
       ) => void = () => {};
-      vi.mocked(getActiveManageMaterialsOperations).mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveActiveOperations = resolve;
-          }),
+      vi.mocked(getActiveManageMaterialsOperations)
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveActiveOperations = resolve;
+            }),
+        )
+        .mockResolvedValue([]);
+      let handleStatusResponse: (
+        response: TransferStatusResponse,
+      ) => void = () => {};
+      vi.mocked(pollTransferStatus).mockImplementation(
+        async (_id, _shouldStop, handleResponse) => {
+          handleStatusResponse = handleResponse;
+        },
       );
       renderPage();
       await screen.findByTestId("materials-table");
-
-      await userEvent.click(getCheckbox("Select folder 2. Experts"));
-      expect(getCheckbox("Select folder 2. Experts").checked).toBe(true);
+      await userEvent.click(getCheckbox("Select file statement.pdf"));
 
       resolveActiveOperations([activeOperation()]);
-
-      await waitFor(() =>
-        expect(getCheckbox("Select folder 2. Experts")).toBeDisabled(),
+      await screen.findByTestId("manage-materials-operation-spinner");
+      act(() =>
+        handleStatusResponse(
+          copyStatus({ userName: "another.user@example.org" }),
+        ),
       );
-      expect(getCheckbox("Select folder 2. Experts").checked).toBe(false);
-    });
-
-    it("does not show the locked banner when there are no active operations", async () => {
-      renderPage();
-      await screen.findByTestId("materials-table");
 
       expect(
-        screen.queryByTestId("materials-locked-notification-banner"),
-      ).not.toBeInTheDocument();
+        (await screen.findByRole("checkbox", {
+          name: "Select file statement.pdf",
+        })) as HTMLInputElement,
+      ).not.toBeChecked();
     });
   });
 
@@ -539,26 +636,6 @@ describe("ManageMaterialsPage", () => {
       );
     });
 
-    it("keeps the table usable while a copy is in progress", async () => {
-      vi.mocked(pollTransferStatus).mockImplementation(
-        async (_id, _shouldStop, handleResponse) => {
-          handleResponse(copyStatus({ status: "InProgress" }));
-        },
-      );
-      renderPage({
-        pendingCopies: [
-          { id: "copy-1", caseId: "12", destinationPath: rootPath },
-        ],
-      });
-      await screen.findByTestId("materials-table");
-
-      await userEvent.click(getCheckbox("Select file statement.pdf"));
-      expect(getCheckbox("Select file statement.pdf").checked).toBe(true);
-      expect(
-        screen.queryByTestId("copy-success-notification-banner"),
-      ).not.toBeInTheDocument();
-    });
-
     it("shows an error banner when a copy fails", async () => {
       vi.mocked(pollTransferStatus).mockImplementation(
         async (_id, _shouldStop, handleResponse) => {
@@ -594,23 +671,26 @@ describe("ManageMaterialsPage", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("resumes tracking the current user's active copies but not other users' operations", async () => {
+    it("resumes tracking the user's copy after returning to the tab and shows the result", async () => {
       const ownCopy = activeOperation({
         id: "own-copy",
         userName: "Dev_User@example.org",
       });
-      const otherCopy = activeOperation({ id: "other-copy" });
-      vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([
-        ownCopy,
-        otherCopy,
-      ]);
-      renderPage({ initialActiveOperations: [ownCopy, otherCopy] });
-      await screen.findByTestId("materials-table");
+      vi.mocked(getActiveManageMaterialsOperations)
+        .mockResolvedValueOnce([ownCopy])
+        .mockResolvedValue([]);
+      vi.mocked(pollTransferStatus).mockImplementation(
+        async (_id, _shouldStop, handleResponse) => {
+          handleResponse(copyStatus({ id: "own-copy" }));
+        },
+      );
+      renderPage({ initialActiveOperations: [ownCopy] });
 
-      await waitFor(() => expect(pollTransferStatus).toHaveBeenCalled());
-      expect(
-        vi.mocked(pollTransferStatus).mock.calls.map(([id]) => id),
-      ).toEqual(["own-copy"]);
+      const banner = await screen.findByTestId(
+        "copy-success-notification-banner",
+      );
+      expect(banner).toHaveTextContent("They are in: 9. Other");
+      expect(vi.mocked(pollTransferStatus).mock.calls[0][0]).toBe("own-copy");
     });
   });
 });

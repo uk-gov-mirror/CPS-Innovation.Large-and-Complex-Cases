@@ -32,7 +32,6 @@ export {
 } from "./transferStatus.playwright";
 export {
   MANAGE_MATERIALS_COPY_ID_DEV,
-  manageMaterialsActiveOperationsDev,
   getNetAppToNetAppCopyStatusDev,
 } from "./manageMaterials.dev";
 export {

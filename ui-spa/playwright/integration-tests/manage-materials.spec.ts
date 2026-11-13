@@ -138,17 +138,18 @@ test.describe("Manage materials", () => {
     ).not.toBeVisible();
   });
 
-  test("Should disable materials and destination folders locked by an in-progress copy", async ({
+  test("Should hide the materials and show the progress of another user's copy", async ({
     page,
     worker,
   }) => {
+    const otherUserCopyId = "00000000-0000-4000-8000-000000000030";
     await worker.use(
       http.get(
         "https://mocked-out-api/api/v1/cases/:caseId/manage-materials/active",
         async () =>
           HttpResponse.json([
             {
-              id: "00000000-0000-4000-8000-000000000030",
+              id: otherUserCopyId,
               operationType: "BatchCopy",
               sourcePaths: JSON.stringify(["netapp/folder-1-1/"]),
               destinationPaths: JSON.stringify([
@@ -159,29 +160,43 @@ test.describe("Manage materials", () => {
             },
           ]),
       ),
+      http.get(
+        `https://mocked-out-api/api/v1/filetransfer/${otherUserCopyId}/status`,
+        async () =>
+          HttpResponse.json({
+            id: otherUserCopyId,
+            status: "InProgress",
+            transferType: "Copy",
+            direction: "NetAppToNetApp",
+            startedAt: "2000-01-01T00:00:00Z",
+            completedAt: null,
+            failedItems: [],
+            userName: "another_user@example.org",
+            totalFiles: 5,
+            processedFiles: 2,
+            successfulFiles: 2,
+            failedFiles: 0,
+            successfulItems: [],
+            destinationPath: "",
+          }),
+      ),
     );
-    await goToManageMaterials(page);
+    await goToCaseManagement(page, "case-details=true");
+    await page.getByTestId("tab-1").click();
 
     await expect(
-      page.getByTestId("materials-locked-notification-banner"),
-    ).toContainText(
-      "A copy is in progress for this case. 1 item in this folder is locked and cannot be selected.",
-    );
-    await expect(
-      page.getByTestId("material-checkbox-folder-1-1"),
-    ).toBeDisabled();
-
-    await startCopy(page, "folder-1-0");
-    await expect(
-      page.getByTestId("choose-folder-locked-notification-banner"),
+      page.getByTestId("manage-materials-operation-spinner"),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "folder-1-1" }),
-    ).toBeDisabled();
+      page.getByText("another_user@example.org is currently copying materials"),
+    ).toBeVisible();
+    const metrics = page.getByTestId("copy-progress-metrics");
+    await expect(metrics).toContainText("total files : 5");
+    await expect(metrics).toContainText("files processed : 2");
+    await expect(page.getByTestId("materials-table")).not.toBeVisible();
     await expect(
-      page.getByRole("button", { name: "folder-1-0" }),
-    ).toBeDisabled();
-    await expect(page.getByRole("button", { name: "netapp" })).toBeDisabled();
+      page.getByRole("button", { name: "Actions on selection" }),
+    ).not.toBeVisible();
   });
 
   test("Should not show the manage materials tab if the feature is turned off", async ({

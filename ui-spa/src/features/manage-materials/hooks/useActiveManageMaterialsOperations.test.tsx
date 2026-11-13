@@ -48,19 +48,16 @@ describe("useActiveManageMaterialsOperations", () => {
     vi.useRealTimers();
   });
 
-  it("uses the initial operations straight away and works out the locked paths", () => {
+  it("uses the initial operations straight away", () => {
     vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([
       operation,
     ]);
     const { result } = renderActiveOperationsHook([operation]);
 
     expect(result.current.activeOperations).toEqual([operation]);
-    expect(result.current.lockedPaths).toEqual(["netapp/a/", "netapp/b/"]);
-    expect(result.current.isLocked("netapp/a/file.pdf")).toBe(true);
-    expect(result.current.isLocked("netapp/c/")).toBe(false);
   });
 
-  it("refetches on mount so the locks are current", async () => {
+  it("refetches on mount so the active operations are current", async () => {
     vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([]);
     const { result } = renderActiveOperationsHook([operation]);
 

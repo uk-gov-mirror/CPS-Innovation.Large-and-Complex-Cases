@@ -11,7 +11,6 @@ type MaterialsTableProps = {
   items: NetAppFolderData;
   isLoading: boolean;
   selectedPaths: string[];
-  isLocked?: (path: string) => boolean;
   handleCheckboxChange: (id: string, checked: boolean) => void;
   handleFolderClick: (item: NetAppFileFolder) => void;
   handleTableSort: (
@@ -24,15 +23,12 @@ const MaterialsTable: React.FC<MaterialsTableProps> = ({
   items,
   isLoading,
   selectedPaths,
-  isLocked = () => false,
   handleCheckboxChange,
   handleFolderClick,
   handleTableSort,
 }) => {
-  const selectableItems = items.filter(({ path }) => !isLocked(path));
   const areAllItemsSelected =
-    selectableItems.length > 0 &&
-    selectableItems.every(({ path }) => selectedPaths.includes(path));
+    items.length > 0 && items.every(({ path }) => selectedPaths.includes(path));
 
   const getTableHeadData = () => [
     {
@@ -41,7 +37,6 @@ const MaterialsTable: React.FC<MaterialsTableProps> = ({
           <Checkbox
             id={SELECT_ALL_CHECKBOX_ID}
             checked={areAllItemsSelected}
-            disabled={!selectableItems.length}
             onChange={handleCheckboxChange}
             ariaLabel="Select all files and folders"
             data-testid="select-all-materials-checkbox"
@@ -69,7 +64,6 @@ const MaterialsTable: React.FC<MaterialsTableProps> = ({
               <Checkbox
                 id={item.path}
                 checked={selectedPaths.includes(item.path)}
-                disabled={isLocked(item.path)}
                 onChange={handleCheckboxChange}
                 ariaLabel={
                   item.isFolder

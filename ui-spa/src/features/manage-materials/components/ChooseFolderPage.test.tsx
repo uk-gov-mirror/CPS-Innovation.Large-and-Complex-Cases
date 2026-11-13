@@ -1,15 +1,11 @@
 import { forwardRef } from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, vi, expect, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ChooseFolderPage from "./ChooseFolderPage";
-import {
-  getActiveManageMaterialsOperations,
-  getNetAppFolders,
-  initiateBatchCopy,
-} from "../../../apis/gateway-api";
+import { getNetAppFolders, initiateBatchCopy } from "../../../apis/gateway-api";
 import { ApiError } from "../../../common/errors/ApiError";
 import { MainStateContext } from "../../../providers/MainStateProvider";
 import {
@@ -17,14 +13,10 @@ import {
   type MainState,
   type ManageMaterialsSourceItem,
 } from "../../../reducers/mainStateReducer";
-import {
-  type CaseMetaDataResponse,
-  type ManageMaterialsOperation,
-} from "../../../schemas";
+import { type CaseMetaDataResponse } from "../../../schemas";
 
 vi.mock("../../../apis/gateway-api", () => ({
   getNetAppFolders: vi.fn(),
-  getActiveManageMaterialsOperations: vi.fn(),
   initiateBatchCopy: vi.fn(),
 }));
 
@@ -54,15 +46,6 @@ const caseMetaData: CaseMetaDataResponse = {
   activeManageMaterialsOperations: [],
 };
 
-const lockingOperation: ManageMaterialsOperation = {
-  id: "op-1",
-  operationType: "BatchCopy",
-  sourcePaths: JSON.stringify([`${rootPath}2. Experts/`]),
-  destinationPaths: JSON.stringify([`${rootPath}9. Other/`]),
-  userName: "another.user@example.org",
-  createdAt: "2026-01-01T00:00:00Z",
-};
-
 const CaseManagementLocation = () => {
   const location = useLocation();
   return (
@@ -75,11 +58,9 @@ const CaseManagementLocation = () => {
 const renderPage = ({
   sourceItems = [{ path: `${rootPath}1. Case management/`, isFolder: true }],
   stateCaseId = "12",
-  activeOperations = [],
 }: {
   sourceItems?: ManageMaterialsSourceItem[];
   stateCaseId?: string;
-  activeOperations?: ManageMaterialsOperation[];
 } = {}) => {
   const state: MainState = {
     ...initialState,
@@ -94,10 +75,7 @@ const renderPage = ({
     },
     apiData: {
       ...initialState.apiData,
-      caseMetaData: {
-        ...caseMetaData,
-        activeManageMaterialsOperations: activeOperations,
-      },
+      caseMetaData,
     },
   };
   return render(
@@ -141,8 +119,6 @@ describe("ChooseFolderPage", () => {
   beforeEach(() => {
     mockDispatch.mockReset();
     vi.mocked(initiateBatchCopy).mockReset();
-    vi.mocked(getActiveManageMaterialsOperations).mockReset();
-    vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([]);
     vi.mocked(getNetAppFolders).mockImplementation(async (path: string) => {
       if (path === rootPath)
         return {
@@ -200,19 +176,13 @@ describe("ChooseFolderPage", () => {
     expect(copyButton()).toBeEnabled();
   });
 
-  it("disables the folders being copied and folders locked by active operations", async () => {
-    vi.mocked(getActiveManageMaterialsOperations).mockResolvedValue([
-      lockingOperation,
-    ]);
-    renderPage({ activeOperations: [lockingOperation] });
+  it("disables the folders being copied", async () => {
+    renderPage();
     await screen.findByRole("tree");
 
     expect(getFolderButton("1. Case management")).toBeDisabled();
-    expect(getFolderButton("2. Experts")).toBeDisabled();
+    expect(getFolderButton("2. Experts")).toBeEnabled();
     expect(getFolderButton("3. Counsel")).toBeEnabled();
-    expect(
-      screen.getByTestId("choose-folder-locked-notification-banner"),
-    ).toHaveTextContent("Some folders are locked and cannot be selected.");
   });
 
   it("copies the selected items to the destination and returns to manage materials", async () => {
@@ -274,7 +244,7 @@ describe("ChooseFolderPage", () => {
     expect(mockDispatch).not.toHaveBeenCalled();
   });
 
-  it("shows the conflict messages and refreshes the locks on a 409", async () => {
+  it("shows the conflict messages on a 409", async () => {
     vi.mocked(initiateBatchCopy).mockRejectedValue(
       new ApiError(
         "initiate batch copy failed",
@@ -285,9 +255,6 @@ describe("ChooseFolderPage", () => {
     );
     renderPage();
     await screen.findByRole("tree");
-    await waitFor(() =>
-      expect(getActiveManageMaterialsOperations).toHaveBeenCalledTimes(1),
-    );
 
     await userEvent.click(getFolderButton("3. Counsel"));
     await userEvent.click(copyButton());
@@ -301,9 +268,6 @@ describe("ChooseFolderPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId("case-management-page")).toBeNull();
     expect(mockDispatch).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(getActiveManageMaterialsOperations).toHaveBeenCalledTimes(2),
-    );
   });
 
   it("redirects to manage materials when there are no items to copy", async () => {
