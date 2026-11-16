@@ -195,9 +195,9 @@ describe("ManageMaterialsPage", () => {
     expect(within(rows[2]).queryByTestId("folder-icon")).toBeNull();
     expect(within(rows[2]).getByText("statement.pdf")).toBeInTheDocument();
 
-    expect(
-      screen.getByTestId("manage-materials-breadcrumbs"),
-    ).toHaveTextContent("Shared Drive: Thunderstruck");
+    expect(screen.getByTestId("folder-path")).toHaveTextContent(
+      "Shared Drive: Thunderstruck",
+    );
   });
 
   it("selects single and multiple items, and deselects without affecting the rest", async () => {
@@ -309,9 +309,9 @@ describe("ManageMaterialsPage", () => {
     expect(getNetAppFolders).toHaveBeenCalledWith(
       `${rootPath}1. Case management/`,
     );
-    expect(
-      screen.getByTestId("manage-materials-breadcrumbs"),
-    ).toHaveTextContent("1. Case management");
+    expect(screen.getByTestId("folder-path")).toHaveTextContent(
+      "1. Case management",
+    );
 
     await userEvent.click(
       screen.getByRole("button", { name: "Shared Drive: Thunderstruck" }),
@@ -404,9 +404,7 @@ describe("ManageMaterialsPage", () => {
       expect(
         screen.queryByRole("button", { name: "Actions on selection" }),
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId("manage-materials-breadcrumbs"),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId("folder-path")).not.toBeInTheDocument();
     };
 
     it("does not show the spinner when there are no active operations", async () => {

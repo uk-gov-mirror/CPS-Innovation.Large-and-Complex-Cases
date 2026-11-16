@@ -21,6 +21,7 @@ import {
   DropdownButton,
   type DropdownButtonItem,
 } from "../../../components/common/DropdownButton";
+import FolderPath from "../../../components/common/FolderPath";
 import { Spinner } from "../../../components/common/Spinner";
 import {
   Details,
@@ -413,33 +414,11 @@ const ManageMaterialsPage: React.FC<ManageMaterialsPageProps> = ({
         <>
           {renderCopyResultBanner()}
 
-          <nav
-            className={`govuk-breadcrumbs ${styles.breadcrumbs}`}
-            aria-label="Breadcrumb"
-            data-testid="manage-materials-breadcrumbs"
-          >
-            <ol className="govuk-breadcrumbs__list">
-              {breadcrumbFolders.map((folder, index) => (
-                <li
-                  key={folder.folderPath}
-                  className="govuk-breadcrumbs__list-item"
-                >
-                  {index === breadcrumbFolders.length - 1 ? (
-                    folder.folderName
-                  ) : (
-                    <button
-                      type="button"
-                      className={`govuk-breadcrumbs__link ${styles.breadcrumbLink}`}
-                      disabled={isLoading}
-                      onClick={() => navigateToFolder(folder.folderPath)}
-                    >
-                      {folder.folderName}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </nav>
+          <FolderPath
+            folders={breadcrumbFolders}
+            disabled={isLoading}
+            handleFolderPathClick={navigateToFolder}
+          />
 
           <div className={styles.toolbar}>
             <DropdownButton

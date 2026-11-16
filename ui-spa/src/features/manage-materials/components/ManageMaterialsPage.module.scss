@@ -44,12 +44,8 @@
   font-size: 1.5rem;
 }
 
-.breadcrumbs {
-  margin: 25px 0 10px 30px;
-}
-
 .toolbar {
-  margin: 16px 15px 0;
+  margin: 16px 0 0;
 
   & :global(#dropdown-panel .govuk-button--secondary:not(:disabled)) {
     &:hover,
@@ -57,18 +53,5 @@
       background: #767676;
       color: #ffffff;
     }
-  }
-}
-
-.breadcrumbLink {
-  padding: 0;
-  border: 0;
-  background: none;
-  font-size: inherit;
-  line-height: inherit;
-  cursor: pointer;
-
-  &:disabled {
-    cursor: not-allowed;
   }
 }

@@ -1,6 +1,6 @@
 .materialsTableWrapper {
   position: relative;
-  margin: 16px 15px 0;
+  margin: 16px 0 0;
   min-height: 21.875rem;
 
   .spinnerWrapper {
@@ -61,7 +61,7 @@
   }
 
   & :global(.govuk-checkboxes--small) {
-    padding-left: 18px;
+    padding-left: 0;
     margin-left: 0;
 
     & :global(.govuk-checkboxes__item) {
