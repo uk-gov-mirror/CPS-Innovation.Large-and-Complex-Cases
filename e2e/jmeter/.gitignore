@@ -1,0 +1,8 @@
+# Filled-in environment/credential files and environment-specific case lists
+config/env-*.properties
+data/cases-*.csv
+data/egress-files-*.csv
+data/*.provision.jsonl
+
+# Run output
+results/
