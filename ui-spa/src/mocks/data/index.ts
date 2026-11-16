@@ -41,3 +41,6 @@ export {
 } from "./manageMaterials.playwright";
 export { activityLogDev } from "./activityLog.dev";
 export { activityLogPlaywright } from "./activityLog.playwright";
+
+export { sharedDriveTemplatesDev } from "./sharedDriveTemplates.dev";
+export { sharedDriveTemplatesPlaywright } from "./sharedDriveTemplates.playwright";

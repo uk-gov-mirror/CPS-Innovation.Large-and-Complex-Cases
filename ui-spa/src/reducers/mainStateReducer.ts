@@ -78,10 +78,10 @@ export type MainState = {
         folderPath: string;
       };
     };
-    connectEgressFailurePage: {
+    egressCreateConnectFailurePage: {
       backLinkUrl: string;
     };
-    connectSharedDriveFailurePage: {
+    sharedDriveCreateConnectFailurePage: {
       backLinkUrl: string;
     };
     transferDestinationPage: TransferDestinationPageData;
@@ -102,6 +102,7 @@ export type MainState = {
     } | null;
     caseRegistrationCaseDetails: SearchResult | null;
     manageMaterialsPage: ManageMaterialsPageData;
+    selectedCreateSharedDriveFolderPath: string | null;
   };
   formData: FormData;
   apiData: {
@@ -139,10 +140,10 @@ export const initialState: MainState = {
         folderPath: "",
       },
     },
-    connectEgressFailurePage: {
+    egressCreateConnectFailurePage: {
       backLinkUrl: "",
     },
-    connectSharedDriveFailurePage: {
+    sharedDriveCreateConnectFailurePage: {
       backLinkUrl: "",
     },
     caseRegistrationCaseDetails: null,
@@ -169,6 +170,7 @@ export const initialState: MainState = {
       sourceItems: [],
       pendingCopies: [],
     },
+    selectedCreateSharedDriveFolderPath: null,
   },
   formData: {
     searchType: "urn",
@@ -252,7 +254,7 @@ export type MainStateActions =
       };
     }
   | {
-      type: "SET_EGRESS_CONNECT_FAILURE_PAGE";
+      type: "SET_EGRESS_CREATE_CONNECT_FAILURE_PAGE";
       payload: {
         backLinkUrl: string;
       };
@@ -262,10 +264,14 @@ export type MainStateActions =
       payload: SearchResult;
     }
   | {
-      type: "SET_SHARED_DRIVE_CONNECT_FAILURE_PAGE";
+      type: "SET_SHARED_DRIVE_CREATE_CONNECT_FAILURE_PAGE";
       payload: {
         backLinkUrl: string;
       };
+    }
+  | {
+      type: "SET_SELECTED_CREATE_SHARED_DRIVE_FOLDER_PATH";
+      payload: string;
     }
   | {
       type: "SET_TRANSFER_DESTINATION_PAGE";
@@ -403,23 +409,23 @@ export const mainStateReducer = (
         },
       };
     }
-    case "SET_EGRESS_CONNECT_FAILURE_PAGE": {
+    case "SET_EGRESS_CREATE_CONNECT_FAILURE_PAGE": {
       return {
         ...state,
         appData: {
           ...state.appData,
-          connectEgressFailurePage: {
+          egressCreateConnectFailurePage: {
             ...action.payload,
           },
         },
       };
     }
-    case "SET_SHARED_DRIVE_CONNECT_FAILURE_PAGE": {
+    case "SET_SHARED_DRIVE_CREATE_CONNECT_FAILURE_PAGE": {
       return {
         ...state,
         appData: {
           ...state.appData,
-          connectSharedDriveFailurePage: {
+          sharedDriveCreateConnectFailurePage: {
             ...action.payload,
           },
         },
@@ -490,6 +496,16 @@ export const mainStateReducer = (
         appData: {
           ...state.appData,
           caseRegistrationCaseDetails: action.payload,
+        },
+      };
+    }
+
+    case "SET_SELECTED_CREATE_SHARED_DRIVE_FOLDER_PATH": {
+      return {
+        ...state,
+        appData: {
+          ...state.appData,
+          selectedCreateSharedDriveFolderPath: action.payload,
         },
       };
     }
