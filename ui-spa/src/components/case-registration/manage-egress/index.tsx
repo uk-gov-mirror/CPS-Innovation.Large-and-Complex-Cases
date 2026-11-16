@@ -148,6 +148,12 @@ const ManageEgressPage = () => {
 
     setDisableButtons(true);
     if (formData.manageEgressRadio === "skip-egress") {
+      dispatch({
+        type: "SET_MANAGE_SETUP_EGRESS_SHARED_DRIVE",
+        payload: {
+          setupEgressStatus: "skipped",
+        },
+      });
       void navigate(`/case-registration/manage-set-up-shared-drive`);
       return;
     }
@@ -165,6 +171,12 @@ const ManageEgressPage = () => {
 
     await createEgressCaseMutation.mutateAsync({
       caseId,
+    });
+    dispatch({
+      type: "SET_MANAGE_SETUP_EGRESS_SHARED_DRIVE",
+      payload: {
+        setupEgressStatus: "created",
+      },
     });
     void navigate(`/case-registration/egress-connect-confirmation`);
     setDisableButtons(false);

@@ -7,6 +7,7 @@ import { mapAreaLookups } from "./utils/mapAreaLookups";
 import { FeatureFlagData } from "../common/types/FeatureFlagData";
 import { InitiateFileTransferPayload } from "../schemas/requests/initiateFileTransferPayload";
 import { TransferFailedItem, IndexingError } from "../schemas";
+import { EgressSharedDriveSetupStatus } from "../common/types/EgressSharedDriveSetupStatus";
 export type FormData = {
   searchType: "urn" | "operation name" | "defendant name";
   operationName: string;
@@ -84,6 +85,10 @@ export type MainState = {
     } | null;
     caseRegistrationCaseDetails: SearchResult | null;
     selectedCreateSharedDriveFolderPath: string | null;
+    manageSetupEgressSharedDrive: {
+      setupEgressStatus: EgressSharedDriveSetupStatus | null;
+      setupSharedDriveStatus: EgressSharedDriveSetupStatus | null;
+    };
   };
   formData: FormData;
   apiData: {
@@ -146,6 +151,10 @@ export const initialState: MainState = {
     transferErrorsPage: null,
     transferPage: null,
     selectedCreateSharedDriveFolderPath: null,
+    manageSetupEgressSharedDrive: {
+      setupEgressStatus: null,
+      setupSharedDriveStatus: null,
+    },
   },
   formData: {
     searchType: "urn",
@@ -274,6 +283,13 @@ export type MainStateActions =
         transferSource: "egress" | "netapp";
         transferSourceEgressFolderPath: string;
         transferSourceNetAppFolderPath: string;
+      };
+    }
+  | {
+      type: "SET_MANAGE_SETUP_EGRESS_SHARED_DRIVE";
+      payload: {
+        setupEgressStatus?: EgressSharedDriveSetupStatus;
+        setupSharedDriveStatus?: EgressSharedDriveSetupStatus;
       };
     };
 
@@ -466,6 +482,18 @@ export const mainStateReducer = (
         appData: {
           ...state.appData,
           selectedCreateSharedDriveFolderPath: action.payload,
+        },
+      };
+    }
+    case "SET_MANAGE_SETUP_EGRESS_SHARED_DRIVE": {
+      return {
+        ...state,
+        appData: {
+          ...state.appData,
+          manageSetupEgressSharedDrive: {
+            ...state.appData.manageSetupEgressSharedDrive,
+            ...action.payload,
+          },
         },
       };
     }

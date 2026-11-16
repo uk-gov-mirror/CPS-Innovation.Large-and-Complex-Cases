@@ -43,7 +43,7 @@ export class SharedDriveCreateConnectFolderPage {
   }
 
   async verifyAllButtonsDisabled(type: "create" | "connect") {
-    const btnName = type === "create" ? "Create" : "Connect";
+    const btnName = type === "create" ? "Create here" : "Connect";
     const rows = this.page.locator("table tbody tr");
     const buttons = rows.getByRole("button", {
       name: new RegExp(btnName, "i"),
@@ -61,7 +61,7 @@ export class SharedDriveCreateConnectFolderPage {
     const rows = this.page.locator("table tbody tr");
     const row = rows.nth(rowIndex);
     const actionBtn = row.getByRole("button", {
-      name: new RegExp(type === "create" ? "Create" : "Connect", "i"),
+      name: new RegExp(type === "create" ? "Create here" : "Connect", "i"),
     });
     await actionBtn.click();
   }

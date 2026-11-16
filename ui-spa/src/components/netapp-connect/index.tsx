@@ -119,6 +119,12 @@ const NetAppPage = () => {
           caseId: `${caseId}`,
         });
         if (isRegistrationFlow) {
+          dispatch({
+            type: "SET_MANAGE_SETUP_EGRESS_SHARED_DRIVE",
+            payload: {
+              setupSharedDriveStatus: "connected",
+            },
+          });
           void navigate(
             "/case-registration/case-registration-final-confirmation",
           );

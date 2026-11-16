@@ -91,7 +91,7 @@ const NetAppFolderResultsPage: React.FC<NetAppFolderResultsPageProps> = ({
             onClick={() => handleFolderAction(data.folderPath)}
             disabled={disableBtns}
           >
-            {setupType === "create" ? "Create" : "Connect"}
+            {setupType === "create" ? "Create here" : "Connect"}
           </Button>
         ),
       };

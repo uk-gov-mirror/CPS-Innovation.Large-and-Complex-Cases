@@ -23,4 +23,8 @@ export const MAINTENANCE_MODE_MESSAGE1 = import.meta.env
 export const MAINTENANCE_MODE_MESSAGE2 = import.meta.env
   .VITE_MAINTENANCE_MODE_MESSAGE2;
 
+export const EGRESS_URL = `${import.meta.env.VITE_EGRESS_URL}`;
+export const CMS_CLASSIC_URL = `${import.meta.env.VITE_CMS_CLASSIC_URL}`;
+export const CASES_AND_TASKS_URL = `${import.meta.env.VITE_CASES_AND_TASKS_URL}`;
+
 console.log(JSON.stringify(import.meta.env));

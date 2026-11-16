@@ -74,6 +74,9 @@ VITE_FEATURE_FLAG_DISCONNECT_SHARED_DRIVE=<true|false>
 VITE_FEATURE_FLAG_MAINTENANCE_MODE:<true|false>
 VITE_MAINTENANCE_MODE_MESSAGE1: <string message>
 VITE_MAINTENANCE_MODE_MESSAGE2: <string message>
+VITE_VITE_EGRESS_URL: <string message>
+VITE_CMS_CLASSIC_URL: <string message>
+VITE_CASES_AND_TASKS_URL: <string message>
 ```
 
 **Sample `.env.local` file:**
@@ -196,11 +199,13 @@ VITE_FEATURE_FLAG_DISCONNECT_SHARED_DRIVE=true
 1. Set up your environment variables as described above.
 2. Start PostgreSQL and ensure your connection string is correct.
 3. Run the backend build/test script with migration:
+
    ```powershell
    ./scripts/build-and-test-backend-local.ps1 -RunMigration -ConnectionString "Host=localhost;Port=5432;Database=lacc;Username=postgres;Password=yourpassword"
    ```
 
    - The `-ConnectionString` parameter is required with `-RunMigration` to apply migrations to your local database.
+
 4. In two terminals, start both backend function apps:
 
    ```powershell
@@ -226,6 +231,7 @@ VITE_FEATURE_FLAG_DISCONNECT_SHARED_DRIVE=true
 ### Backend
 
 - To run all backend tests with coverage, use the script:
+
   ```powershell
   ./scripts/build-and-test-backend-local.ps1
   ```
@@ -236,6 +242,7 @@ VITE_FEATURE_FLAG_DISCONNECT_SHARED_DRIVE=true
 ### UI
 
 - To run all UI tests (unit, coverage, and E2E), use the script:
+
   ```powershell
   ./scripts/build-and-test-ui-local.ps1
   ```

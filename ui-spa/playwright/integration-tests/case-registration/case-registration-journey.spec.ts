@@ -237,7 +237,7 @@ test("case registration create new shared drive folder flow", async ({
   ]);
   await sharedDriveCreateConnectFolderPage.verifyTableRows([
     ["", "thunderstrike"],
-    ["Create", "thunderstrikeab"],
+    ["Create here", "thunderstrikeab"],
   ]);
   await sharedDriveCreateConnectFolderPage.clickCreateConnectBtn("create", 1);
   const caseRegistrationSharedDriveTemplatesPage =
@@ -312,7 +312,7 @@ test("case registration create new shared drive folder with zero templates error
   ]);
   await sharedDriveCreateConnectFolderPage.verifyTableRows([
     ["", "thunderstrike"],
-    ["Create", "thunderstrikeab"],
+    ["Create here", "thunderstrikeab"],
   ]);
   await sharedDriveCreateConnectFolderPage.clickCreateConnectBtn("create", 1);
   const caseRegistrationSharedDriveTemplatesPage =
@@ -381,7 +381,7 @@ test("case registration create new shared drive folder with get templates error 
   ]);
   await sharedDriveCreateConnectFolderPage.verifyTableRows([
     ["", "thunderstrike"],
-    ["Create", "thunderstrikeab"],
+    ["Create here", "thunderstrikeab"],
   ]);
   await sharedDriveCreateConnectFolderPage.clickCreateConnectBtn("create", 1);
   const caseRegistrationSharedDriveTemplatesPage =
@@ -462,7 +462,7 @@ test("case registration create new shared drive folder should do auto submission
   ]);
   await sharedDriveCreateConnectFolderPage.verifyTableRows([
     ["", "thunderstrike"],
-    ["Create", "thunderstrikeab"],
+    ["Create here", "thunderstrikeab"],
   ]);
   await sharedDriveCreateConnectFolderPage.clickCreateConnectBtn("create", 1);
   const caseRegistrationSharedDriveTemplatesPage =
@@ -524,7 +524,7 @@ test("case registration create new shared drive folder error flow", async ({
   ]);
   await sharedDriveCreateConnectFolderPage.verifyTableRows([
     ["", "thunderstrike"],
-    ["Create", "thunderstrikeab"],
+    ["Create here", "thunderstrikeab"],
   ]);
   await sharedDriveCreateConnectFolderPage.clickCreateConnectBtn("create", 1);
   const caseRegistrationSharedDriveTemplatesPage =

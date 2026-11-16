@@ -21,7 +21,7 @@ const ManageSharedDrivePage = () => {
   type FormDataErrors = {
     manageSharedDriveRadio?: ErrorText;
   };
-  const { state } = useContext(MainStateContext);
+  const { state, dispatch } = useContext(MainStateContext);
   const [disableButtons] = useState(false);
   const navigate = useNavigate();
 
@@ -80,6 +80,12 @@ const ManageSharedDrivePage = () => {
       state.appData.caseRegistrationCaseDetails?.leadDefendantName;
 
     if (formData.manageSharedDriveRadio === "skip-shared-drive") {
+      dispatch({
+        type: "SET_MANAGE_SETUP_EGRESS_SHARED_DRIVE",
+        payload: {
+          setupSharedDriveStatus: "skipped",
+        },
+      });
       void navigate("/case-registration/case-registration-final-confirmation");
       return;
     }

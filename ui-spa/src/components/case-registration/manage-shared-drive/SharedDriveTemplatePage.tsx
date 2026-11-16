@@ -43,6 +43,12 @@ const SharedDriveTemplatePage = () => {
       void navigate(`/case-registration/create-shared-drive-folder-error`);
     },
     onSuccess: () => {
+      dispatch({
+        type: "SET_MANAGE_SETUP_EGRESS_SHARED_DRIVE",
+        payload: {
+          setupSharedDriveStatus: "created",
+        },
+      });
       void navigate("/case-registration/case-registration-final-confirmation");
       setDisableButtons(false);
     },
